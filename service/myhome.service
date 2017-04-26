@@ -1,0 +1,11 @@
+[Unit]
+Description=MyHome Controller server
+After=network.target auditd.service
+
+[Service]
+EnvironmentFile=-/opt/myhome
+ExecStart=/opt/myhome/start.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
