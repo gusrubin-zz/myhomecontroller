@@ -4,9 +4,10 @@
 echo "Installing MyHome Controller"
 
 tar -zcpvf /tmp/myhome-1.0.tgz *
-tar -zxpvf /tmp/myhome-1.0.tgz --directory=/opt
+mkdir /opt/myhome
+tar -zxpvf /tmp/myhome-1.0.tgz --directory=/opt/myhome
 
-cp service/myhome.service /etc/systemd/system
+cp /opt/myhome/service/myhome.service /etc/systemd/system
 systemctl daemon-reload
 systemctl enable myhome.service
 
