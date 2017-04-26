@@ -1,7 +1,7 @@
 {
-  "name": "helloexpress",
+  "name": "myhome",
   "version": "1.0.0",
-  "description": "Primeiro app em express",
+  "description": "Home Controller",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
