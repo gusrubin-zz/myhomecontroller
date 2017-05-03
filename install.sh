@@ -7,6 +7,8 @@ tar -zcpvf /tmp/myhome-1.0.tgz *
 mkdir /opt/myhome
 tar -zxpvf /tmp/myhome-1.0.tgz --directory=/opt/myhome
 
+touch /opt/myhome/states.json
+
 cp /opt/myhome/service/myhome.service /etc/systemd/system
 systemctl daemon-reload
 systemctl enable myhome.service

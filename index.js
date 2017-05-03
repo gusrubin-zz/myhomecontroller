@@ -1,23 +1,37 @@
 var fs = require('fs');
-var http = require('http');
 var https = require('https');
+var basicAuth = require('express-basicauth');
 var privateKey  = fs.readFileSync('ssl/server.key', 'utf8');
 var certificate = fs.readFileSync('ssl/server.crt', 'utf8');
 var credentials = {key: privateKey, cert: certificate};
 
-var fileTest = 'states.json';
 var pathGPIO = '/sys/class/gpio/gpio';
 var configFile = 'config.json';
+var usersFile = 'users.json';
+var statusGPIOsFile = 'states.json';
 var objLuz = {};
 var express = require('express');
 var app = express();
+var users = readFile(usersFile); //Lê arquivo de configuração das GPIOs
 
-function noOp() {}
+app.use(basicAuth({authenticator: myAuthorizer}));
+	
+function myAuthorizer(username, password) {
+	for (var i = 0; i < users.length; i++) {
+		if (users[i].login == username.toString("ascii") && users[i].password == password.toString("ascii")) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+}
 
 app.use(function (req, res, next) {
 	console.log('Time:', new Date().toISOString());
 	next();
 });
+
+function noOp() {}
 
 var bodyParser = require('body-parser');
 app.use(bodyParser.json()); // for parsing application/json
@@ -63,7 +77,8 @@ function persistConfig() {
 
 //Levantar mapeamento de GPIOs no config.json
 console.log("Construindo mapa de GPIOs:");
-var config = readFile(configFile); //Lê arquivo de configuração e estados das GPIOs
+var config = readFile(configFile); //Lê arquivo de configuração das GPIOs
+var statusGPIOs = readFile(statusGPIOsFile); //Lê arquivo de status das GPIOs
 
 var sys = require('util')
 var exec = require('child_process').exec;
@@ -77,11 +92,6 @@ var pinMapping = {
   '2': 4,
   '3': 5
 };
-
-/*
-function writeConfigGPIO(gpio, direction) {
-	exec("echo " + gpio + " > /sys/class/gpio/export; echo " + direction + " > /sys/class/gpio/gpio" + gpio + "/direction", puts);
-}*/
 
 function createConfigGPIO(gpio, direction, callback) {
 	try {
@@ -107,6 +117,32 @@ function updateStateGPIO(gpio, value, callback) {
 function setupGPIO(gpio, value, callback) {
 	return callback(gpio, value, noOp);
 }
+
+function statusBuild() {
+	var states = {}
+	for(var ambiente in config.ambientes){
+		for(var dispositivo in config.ambientes[ambiente].dispositivos){
+			var gpio = config.ambientes[ambiente].dispositivos[dispositivo].gpio;
+			if (gpio != null){
+				if (config.ambientes[ambiente].dispositivos[dispositivo].tipo == 'saida_digital'){
+					setupGPIO(gpio, 'out', createConfigGPIO);
+					if (statusGPIOs[gpio] == "on") {
+						state = 0;
+						states[gpio] = "on";
+					} else {
+						state = 1;
+						states[gpio] = "off";
+					}
+					updateStateGPIO(gpio, state, updateStateGPIO);
+				}		
+			}
+		}
+	}
+	var dadosState = JSON.stringify(states);
+	writeFile(statusGPIOsFile, dadosState);
+}
+
+statusBuild();
 
 function gpios(action) {
 	switch(action) {
@@ -154,7 +190,7 @@ function gpios(action) {
 				var gpio = config.ambientes[ambiente].dispositivos[dispositivo].gpio;
 				if (gpio != null){
 					if (config.ambientes[ambiente].dispositivos[dispositivo].tipo == 'saida_digital'){
-						setupGPIO(gpio, 'out', createConfigGPIO);
+						//setupGPIO(gpio, 'out', createConfigGPIO);
 						var state;
 						if (config.ambientes[ambiente].dispositivos[dispositivo].detalhes.estado == "on") {
 							state = 0;
@@ -168,12 +204,11 @@ function gpios(action) {
 		}
 	}
 }
-gpios('setUpdate');
+
 gpios('listActive');
 
-//
-
 function ambientes(action, id_ambiente, id_dispositivo, estado) {
+	statusGPIOs = readFile(statusGPIOsFile);
 	switch(action) {
     case "listAll":
 		var item = Object();
@@ -192,38 +227,18 @@ function ambientes(action, id_ambiente, id_dispositivo, estado) {
         break;
 	case "showEstadoDispositivo":
 		var item = Object();
-		item = {"estado":config.ambientes[id_ambiente].dispositivos[id_dispositivo].detalhes.estado};
+		var gpio = config.ambientes[id_ambiente].dispositivos[id_dispositivo].gpio;
+		item = {"estado":statusGPIOs[gpio]};
 		return item;
         break;
     case "updateItem":
 		var gpio = config.ambientes[id_ambiente].dispositivos[id_dispositivo].gpio;
-		config.ambientes[id_ambiente].dispositivos[id_dispositivo].detalhes.estado = estado;
 		writeGPIO(gpio, estado);
+		statusGPIOs[gpio] = estado;
+		var dadosState = JSON.stringify(statusGPIOs);
+		writeFile(statusGPIOsFile, dadosState);
 		return {"estado":estado};
 	}
-}
-
-function open(pinNumber, direction, callback) {
-  const path = sysFsPath + '/gpio' + pinMapping[pinNumber] + '/direction';
-  const pathValue = sysFsPath + '/gpio' + pinMapping[pinNumber] + '/value';
-
-  var state = readFile(fileTest).status;
-	console.log('state: ' + state);
-	if (state == "on") {
-		fs.writeFile(pathValue, 0, 'utf8', callback);
-	} else {
-		fs.writeFile(pathValue, 1, 'utf8', callback);
-	}
-  fs.writeFile(path, direction, (callback || noOp));
-}
-
-//open(1, 'out', noOp());
-
-function write(pinNumber, value, callback) {
-  const path = sysFsPath + '/gpio' + pinMapping[pinNumber] + '/value';
-  value = !!value ? '1' : '0';
-
-  fs.writeFile(path, value, 'utf8', callback);
 }
 
 app.route('/configs')
@@ -285,8 +300,6 @@ app.route('/ambientes/:id_ambiente/dispositivos/:id_dispositivo/estado')
 	console.log('Retornado %s\n', json.estado);
 });
 
-var httpServer = http.createServer(app);
 var httpsServer = https.createServer(credentials, app);
 
-httpServer.listen(8080);
 httpsServer.listen(8443);
