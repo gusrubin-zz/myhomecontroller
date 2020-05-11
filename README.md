@@ -1,4 +1,4 @@
-# myhome
+# myhomecontroller
 Controlador de dispositivos domésticos desenvolvido em NodeJs
 
 Procedimento de instalação do Raspberry Pi com o app controlador
