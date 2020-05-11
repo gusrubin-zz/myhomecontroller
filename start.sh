@@ -3,5 +3,5 @@
 
 echo "Starting MyHome Controller"
 
-cd /opt/myhome
-node index.js > out.txt
+cd /opt/myhomecontroller
+node index.js > controller-console-log.txt
